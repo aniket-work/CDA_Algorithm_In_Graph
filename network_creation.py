@@ -32,9 +32,9 @@ def generate_transactions(entities, num_transactions):
 # Function to create and visualize network
 def create_and_visualize_network():
     # Generate entities
-    num_banks = 5
-    num_personal_accounts = 10
-    num_social_accounts = 15
+    num_banks = 10  # Increased number of banks
+    num_personal_accounts = 20  # Increased number of personal accounts
+    num_social_accounts = 30  # Increased number of social accounts
     entities = generate_entities(num_banks, num_personal_accounts, num_social_accounts)
 
     # Create a networkx graph
@@ -44,7 +44,7 @@ def create_and_visualize_network():
     G.add_nodes_from(entities)
 
     # Generate transactions
-    num_transactions = 50
+    num_transactions = 200  # Increased number of transactions
     transactions = generate_transactions(entities, num_transactions)
 
     # Add edges with transaction details
@@ -62,13 +62,26 @@ def create_and_visualize_network():
     # Open the HTML file in a web browser
     webbrowser.open_new_tab(html_file)
 
-
-# Call the function to create and visualize the network
-create_and_visualize_network()
-
-from neo4j import GraphDatabase
+    return G
 
 
+# Function to run Louvain algorithm and return community results
+def run_louvain(tx, graph_name):
+    print("Graph name inside run_louvain:", graph_name)  # Add this line
+    print("Available graphs:", tx.run("CALL gds.graph.list()").value())  # Add this line
+    query = (
+        f"CALL gds.louvain.mutate('{graph_name}', "  # Use the in-memory graph name
+        "{ mutateProperty: 'communityId' }) YIELD communityCount, modularity, modularities"
+    )
+    result = tx.run(query)
+    community_results = {}
+    for record in result:
+        print(f"Detected {record['communityCount']} communities with modularity {record['modularity']}")
+        community_results = record['modularities']
+    return community_results
+
+
+# Function to load data into Neo4j
 def load_data_into_neo4j(tx, entities, transactions):
     for entity in entities:
         tx.run("CREATE (:Entity {id: $id})", id=entity)
@@ -81,21 +94,15 @@ def load_data_into_neo4j(tx, entities, transactions):
                transaction_type=transaction_details['transaction_type'],
                amount=transaction_details['amount'])
 
-def run_louvain(tx, graph_name):  # Add graph_name as a parameter
-    print("Graph name inside run_louvain:", graph_name)  # Add this line
-    print("Available graphs:", tx.run("CALL gds.graph.list()").value())  # Add this line
-    query = (
-        f"CALL gds.louvain.mutate('{graph_name}', "  # Use the in-memory graph name
-        "{ mutateProperty: 'communityId' }) YIELD communityCount, modularity, modularities"
-    )
-    result = tx.run(query)
-    for record in result:
-        print(f"Detected {record['communityCount']} communities with modularity {record['modularity']}")
 
-
+# Function to visualize network with communities
+def visualize_network_with_communities(G, community_results):
+    # You can implement this function to visualize the network with identified communities.
+    # This function could use colors or different styles to represent different communities.
+    pass
 
 def verify_projected_graph(tx):
-    tx.run(" CALL gds.graph.project(  "
+    tx.run("CALL gds.graph.project(  "
         "    'financial_graph', "
         "     'Entity', "
         " { "
@@ -115,7 +122,6 @@ def verify_projected_graph(tx):
     return graph_name
 
 
-
 # Neo4j connection parameters
 uri = "bolt://localhost:7687"
 user = "neo4j"
@@ -124,27 +130,30 @@ password = "abcd1234"
 # Connect to Neo4j
 driver = GraphDatabase.driver(uri, auth=(user, password))
 with driver.session() as session:
-    # Generate entities and transactions (if you intend to do it in the script)
-    entities = generate_entities(5, 10, 15)
-    transactions = generate_transactions(entities, 50)
+    # Create and visualize the network
+    G = create_and_visualize_network()
 
     # Load data into Neo4j
+    entities = list(G.nodes())
+    transactions = [(source, target, G[source][target][0]) for source, target in G.edges()]
     session.execute_write(load_data_into_neo4j, entities, transactions)
 
     # Delete any existing projected graph
-    session.run("CALL gds.graph.drop('financial_graph')")
-
-
+    session.run("CALL gds.graph.drop('financial_graph', false)")
 
     # Load the projected graph into memory
-    graph_name = session.execute_write(verify_projected_graph)
+    graph_name = verify_projected_graph(session)
     print("graph_name from session", graph_name)
 
     # Optional pause for inspection:
     time.sleep(10)
 
-    # Run Louvain algorithm (pass the graph_name)
-    session.execute_write(lambda tx: run_louvain(tx, graph_name))
+    # Run Louvain algorithm
+    communities = run_louvain(session, graph_name)
+
+    # Visualize the network with communities
+    visualize_network_with_communities(G, communities)
 
 # Close the Neo4j driver
 driver.close()
+
