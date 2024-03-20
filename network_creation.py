@@ -32,9 +32,10 @@ def generate_transactions(entities, num_transactions):
 # Function to create and visualize network
 def create_and_visualize_network():
     # Generate entities
-    num_banks = 10  # Increased number of banks
-    num_personal_accounts = 20  # Increased number of personal accounts
-    num_social_accounts = 30  # Increased number of social accounts
+    num_banks = 10  # Increase number of banks
+    num_personal_accounts = 20  # Increase number of personal accounts
+    num_social_accounts = 30  # Increase number of social accounts
+
     entities = generate_entities(num_banks, num_personal_accounts, num_social_accounts)
 
     # Create a networkx graph
